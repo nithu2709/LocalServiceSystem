@@ -1,26 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Wrench, 
-  User, 
-  Shield, 
-  Briefcase, 
   LogOut, 
   LogIn, 
-  ChevronDown, 
-  Zap,
-  Sparkles,
   Cloud
 } from 'lucide-react';
 
 export default function Navbar({ 
   currentUser, 
-  demoUsers, 
-  onSelectUser, 
   onOpenAuth, 
   onLogout 
 }) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
   const getRoleBadge = (role) => {
     switch (role) {
       case 'ADMIN':
@@ -53,67 +43,10 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Quick Demo Role Switcher & User Profile */}
+          {/* User Profile / Auth State */}
           <div className="flex items-center space-x-3">
-            
-            {/* Quick Demo Switcher Button */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">Demo Switcher</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              {dropdownOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-10" 
-                    onClick={() => setDropdownOpen(false)} 
-                  />
-                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-20">
-                    <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                      Switch Demo Role (1-Click)
-                    </div>
-                    <div className="divide-y divide-slate-100">
-                      {demoUsers.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => {
-                            onSelectUser(user);
-                            setDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 transition flex items-center justify-between ${
-                            currentUser?.id === user.id ? 'bg-indigo-50/70 text-indigo-950 font-medium' : 'text-slate-700'
-                          }`}
-                        >
-                          <div>
-                            <div className="text-xs font-semibold flex items-center gap-1.5">
-                              {user.name}
-                              {currentUser?.id === user.id && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {user.role === 'PROVIDER' ? `Specialty: ${user.category_name}` : user.email}
-                            </div>
-                          </div>
-                          {getRoleBadge(user.role)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* User Profile / Auth State */}
             {currentUser ? (
-              <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
+              <div className="flex items-center space-x-3">
                 <div className="text-right hidden sm:block">
                   <div className="text-xs font-bold text-slate-800 flex items-center justify-end gap-1.5">
                     {currentUser.name}
@@ -140,7 +73,6 @@ export default function Navbar({
                 Sign In
               </button>
             )}
-
           </div>
 
         </div>

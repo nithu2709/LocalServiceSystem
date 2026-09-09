@@ -13,14 +13,12 @@ import {
   AlertCircle, 
   Sparkles, 
   ArrowRight,
-  ShieldCheck,
   Server,
   Cloud
 } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(api.getStoredUser());
-  const [demoUsers, setDemoUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [categories, setCategories] = useState([]);
   const [requests, setRequests] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -37,26 +35,38 @@ export default function App() {
     }, 4000);
   };
 
-  // 1. Initial Load: Fetch categories and demo users
+  // 1. Initial Load: Fetch categories and verify auth state
   useEffect(() => {
     const initData = async () => {
       try {
-        const [catData, demoData] = await Promise.all([
-          api.getCategories(),
-          api.getDemoUsers(),
-        ]);
+        const catData = await api.getCategories();
         if (catData?.data) setCategories(catData.data);
-        if (demoData?.users) setDemoUsers(demoData.users);
-
-        // If no user stored, default to first customer for instant evaluation
-        if (!api.getStoredUser() && demoData?.users?.length > 0) {
-          const defaultCustomer = demoData.users.find(u => u.role === 'CUSTOMER') || demoData.users[0];
-          handleSelectUser(defaultCustomer);
-        }
       } catch (err) {
-        console.error('Initial data load error:', err);
+        console.error('Categories load error:', err);
+      }
+
+      // Check if user has an active, valid token in localStorage
+      const token = localStorage.getItem('localservice_token');
+      if (token) {
+        try {
+          const authRes = await api.getCurrentUser();
+          if (authRes?.user) {
+            setCurrentUser(authRes.user);
+          } else {
+            api.logout();
+            setCurrentUser(null);
+          }
+        } catch {
+          // Token expired or invalid
+          api.logout();
+          setCurrentUser(null);
+        }
+      } else {
+        api.logout();
+        setCurrentUser(null);
       }
     };
+
     initData();
   }, []);
 
@@ -96,26 +106,7 @@ export default function App() {
     loadPortalData();
   }, [loadPortalData]);
 
-  // 3. User & Role Switching
-  const handleSelectUser = async (user) => {
-    try {
-      // Login with standard demo password
-      const res = await api.login(user.email, 'password123').catch(() => null);
-      if (res?.user) {
-        setCurrentUser(res.user);
-        showToast(`Switched view to ${res.user.name} (${res.user.role})`);
-      } else {
-        // Fallback simulated session for demo
-        localStorage.setItem('localservice_user', JSON.stringify(user));
-        localStorage.setItem('localservice_user_id', user.id);
-        setCurrentUser(user);
-        showToast(`Switched view to ${user.name} (${user.role})`);
-      }
-    } catch (err) {
-      showToast('Error switching demo user', 'error');
-    }
-  };
-
+  // 3. User Authentication
   const handleLogin = async (email, password) => {
     const data = await api.login(email, password);
     setCurrentUser(data.user);
@@ -132,6 +123,9 @@ export default function App() {
     api.logout();
     setCurrentUser(null);
     setRequests([]);
+    setAdminStats(null);
+    setAdminActivity(null);
+    setProviders([]);
     showToast('Signed out successfully.');
   };
 
@@ -222,8 +216,6 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         currentUser={currentUser}
-        demoUsers={demoUsers}
-        onSelectUser={handleSelectUser}
         onOpenAuth={() => setAuthModalOpen(true)}
         onLogout={handleLogout}
       />
@@ -328,16 +320,6 @@ export default function App() {
                 Sign In / Register
                 <ArrowRight className="w-4 h-4" />
               </button>
-
-              {demoUsers.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => handleSelectUser(demoUsers[0])}
-                  className="px-5 py-3 text-sm font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition"
-                >
-                  Quick Demo: Enter as {demoUsers[0].name}
-                </button>
-              )}
             </div>
           </div>
         )}
