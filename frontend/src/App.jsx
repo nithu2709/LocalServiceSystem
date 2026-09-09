@@ -179,16 +179,6 @@ export default function App() {
     }
   };
 
-  // 6. Admin Actions
-  const handleAssignProvider = async (requestId, providerId) => {
-    try {
-      await api.assignProvider(requestId, providerId);
-      showToast(`Assigned provider to Request #${requestId}`);
-      await loadPortalData();
-    } catch (err) {
-      showToast(err.message || 'Failed to assign provider', 'error');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-indigo-500 selection:text-white">
@@ -255,7 +245,6 @@ export default function App() {
                 providers={providers}
                 activity={adminActivity}
                 loading={loading}
-                onAssignProvider={handleAssignProvider}
                 onRefresh={loadPortalData}
               />
             )}

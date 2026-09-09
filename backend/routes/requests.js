@@ -31,18 +31,60 @@ router.post('/', authenticateUser, requireRole('CUSTOMER', 'ADMIN'), async (req,
       });
     }
 
+    // Automatically find available provider in this category with fewest active tasks
+    const providerQuery = `
+      SELECT 
+        sp.id AS provider_id,
+        sp.user_id,
+        u.name AS provider_name,
+        u.phone AS provider_phone,
+        u.email AS provider_email,
+        COUNT(CASE WHEN sr.status IN ('PENDING', 'ACCEPTED', 'ASSIGNED', 'IN_PROGRESS') AND a.completed_at IS NULL THEN 1 END) AS active_tasks
+      FROM service_providers sp
+      JOIN users u ON sp.user_id = u.id
+      LEFT JOIN assignments a ON sp.id = a.provider_id
+      LEFT JOIN service_requests sr ON a.request_id = sr.id
+      WHERE sp.category_id = $1
+      GROUP BY sp.id, sp.user_id, u.name, u.phone, u.email
+      ORDER BY 
+        (CASE WHEN sp.availability = true THEN 0 ELSE 1 END) ASC,
+        active_tasks ASC,
+        sp.id ASC
+      LIMIT 1
+    `;
+
+    const providerResult = await query(providerQuery, [category_id]);
+    const matchedProvider = providerResult.rows.length > 0 ? providerResult.rows[0] : null;
+
+    // If an available provider is found, status is ASSIGNED, otherwise PENDING
+    const initialStatus = matchedProvider ? 'ASSIGNED' : 'PENDING';
+
     const insertResult = await query(
       `INSERT INTO service_requests (customer_id, category_id, title, description, location, preferred_date, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [customer_id, category_id, title.trim(), description.trim(), location.trim(), preferred_date || null]
+      [customer_id, category_id, title.trim(), description.trim(), location.trim(), preferred_date || null, initialStatus]
     );
 
     const newRequest = insertResult.rows[0];
 
+    // Automatically insert assignment record if provider was matched
+    if (matchedProvider) {
+      await query(
+        `INSERT INTO assignments (request_id, provider_id, assigned_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)`,
+        [newRequest.id, matchedProvider.provider_id]
+      );
+      newRequest.provider_id = matchedProvider.provider_id;
+      newRequest.provider_name = matchedProvider.provider_name;
+      newRequest.provider_phone = matchedProvider.provider_phone;
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Service request submitted successfully!',
+      message: matchedProvider
+        ? `Service request submitted and automatically assigned to ${matchedProvider.provider_name}!`
+        : 'Service request submitted successfully!',
       request: newRequest,
     });
   } catch (error) {

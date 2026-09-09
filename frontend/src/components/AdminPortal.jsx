@@ -12,10 +12,10 @@ import {
   Zap, 
   Wrench, 
   Wind, 
-  X,
-  AlertTriangle,
   Layers,
-  Activity
+  Activity,
+  CheckCircle,
+  Calendar
 } from 'lucide-react';
 
 export default function AdminPortal({ 
@@ -24,14 +24,11 @@ export default function AdminPortal({
   providers, 
   activity, 
   loading, 
-  onAssignProvider, 
   onRefresh 
 }) {
   const [activeTab, setActiveTab] = useState('requests'); // 'requests', 'providers', 'activity'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [selectedRequestForAssign, setSelectedRequestForAssign] = useState(null);
-  const [assigning, setAssigning] = useState(false);
 
   const getCategoryIcon = (catName) => {
     switch (catName) {
@@ -90,27 +87,21 @@ export default function AdminPortal({
     return true;
   });
 
-  const handleAssign = async (providerId) => {
-    if (!selectedRequestForAssign) return;
-    setAssigning(true);
-    try {
-      await onAssignProvider(selectedRequestForAssign.id, providerId);
-      setSelectedRequestForAssign(null);
-    } finally {
-      setAssigning(false);
-    }
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
       
-      {/* Header Banner */}
+      {/* Header Banner - Monitoring Console */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-purple-600">Administrator Console</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-purple-600">Administrator Console</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle className="w-2.5 h-2.5" /> Auto-Dispatch Active
+            </span>
+          </div>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">Platform Activity & Operations</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            System overview, technician assignments, and service lifecycle metrics.
+            Read-only live monitoring dashboard with real-time automatic provider assignment tracking.
           </p>
         </div>
 
@@ -137,7 +128,7 @@ export default function AdminPortal({
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-semibold text-amber-600 block uppercase">Pending Queue</span>
           <div className="text-2xl font-black text-amber-600 mt-1">{stats?.pending_requests || 0}</div>
-          <span className="text-[10px] text-slate-400 mt-1 block">Awaiting assignment</span>
+          <span className="text-[10px] text-slate-400 mt-1 block">Awaiting provider match</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
@@ -228,7 +219,7 @@ export default function AdminPortal({
         </button>
       </div>
 
-      {/* TAB 1: ALL REQUESTS MANAGEMENT */}
+      {/* TAB 1: ALL REQUESTS MONITORING TABLE (STRICTLY READ-ONLY) */}
       {activeTab === 'requests' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
           
@@ -254,20 +245,26 @@ export default function AdminPortal({
 
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-500">Category:</span>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
-              >
-                <option value="ALL">All 3 Categories</option>
-                <option value="Electrician">Electrician</option>
-                <option value="Plumber">Plumber</option>
-                <option value="AC Repair">AC Repair</option>
-              </select>
+              <div className="flex gap-1">
+                {['ALL', 'Electrician', 'Plumber', 'AC Repair'].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
+                      categoryFilter === cat
+                        ? 'bg-slate-800 text-white font-semibold'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Table */}
+          {/* Read-Only Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
@@ -277,8 +274,8 @@ export default function AdminPortal({
                   <th className="py-3 px-4">Customer</th>
                   <th className="py-3 px-4">Location</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Technician</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4">Automatically Assigned Provider</th>
+                  <th className="py-3 px-4">Requested Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -307,24 +304,30 @@ export default function AdminPortal({
                       <td className="py-3 px-4">{getStatusBadge(req.status)}</td>
                       <td className="py-3 px-4">
                         {req.provider_name ? (
-                          <div>
-                            <div className="font-semibold text-slate-800">{req.provider_name}</div>
-                            <div className="text-[11px] text-slate-400">{req.provider_phone}</div>
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span>{req.provider_name}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                              <span>{req.provider_phone || req.provider_email}</span>
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                Auto-Assigned
+                              </span>
+                            </div>
                           </div>
                         ) : (
-                          <span className="text-amber-600 italic">Unassigned</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <Clock className="w-3 h-3" /> Awaiting Available Provider
+                          </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        {req.status !== 'COMPLETED' && req.status !== 'CANCELLED' && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRequestForAssign(req)}
-                            className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
-                          >
-                            {req.provider_name ? 'Reassign' : 'Assign'}
-                          </button>
-                        )}
+                      <td className="py-3 px-4 text-slate-500">
+                        {new Date(req.created_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
                       </td>
                     </tr>
                   ))
@@ -385,6 +388,9 @@ export default function AdminPortal({
                   <span className="font-bold text-slate-900">Request #{ev.id}</span> ({ev.category_name}):{' '}
                   <span className="text-slate-600">"{ev.title}"</span> requested by{' '}
                   <span className="font-medium text-slate-800">{ev.customer_name}</span>
+                  {ev.provider_name && (
+                    <span className="text-indigo-600 font-medium"> • Assigned: {ev.provider_name}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {getStatusBadge(ev.status)}
@@ -394,61 +400,6 @@ export default function AdminPortal({
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Assign Provider Modal */}
-      {selectedRequestForAssign && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
-            <button
-              type="button"
-              onClick={() => setSelectedRequestForAssign(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-base font-bold text-slate-900">
-              Assign Technician to Request #{selectedRequestForAssign.id}
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Category: <strong>{selectedRequestForAssign.category_name}</strong> • "{selectedRequestForAssign.title}"
-            </p>
-
-            <div className="mt-4 space-y-2 max-h-80 overflow-y-auto pr-1">
-              {providers
-                .filter((p) => p.category_name === selectedRequestForAssign.category_name)
-                .map((p) => (
-                  <div
-                    key={p.provider_id}
-                    className="p-3.5 rounded-xl border border-slate-200 hover:border-indigo-400 transition flex items-center justify-between bg-slate-50/50"
-                  >
-                    <div>
-                      <div className="font-bold text-xs text-slate-900">{p.name}</div>
-                      <div className="text-[11px] text-slate-500">
-                        {p.phone} • {p.location || 'Local Area'}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-1">
-                        <span className="flex items-center text-amber-500">
-                          <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
-                          {p.avg_rating}
-                        </span>
-                        <span>• {p.completed_jobs || 0} jobs done</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={assigning}
-                      onClick={() => handleAssign(p.provider_id)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50"
-                    >
-                      Assign
-                    </button>
-                  </div>
-                ))}
-            </div>
           </div>
         </div>
       )}
