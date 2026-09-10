@@ -30,34 +30,34 @@ export default function ReviewModal({ request, onClose, onSubmitReview }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-zinc-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-zinc-800 text-white relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="mb-4">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-950/70 text-emerald-300 border border-emerald-800">
             Completed Job
           </span>
-          <h3 className="text-lg font-bold text-slate-900 mt-2">Rate Your Service</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className="text-lg font-bold text-white mt-2">Rate Your Service</h3>
+          <p className="text-xs text-zinc-400 mt-0.5">
             How was your experience for "{request.title}"?
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
+          <div className="mb-4 p-3 bg-red-950/50 border border-red-850 text-red-300 text-xs rounded-xl">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Star Selection */}
-          <div className="text-center py-2 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="text-center py-3 bg-zinc-950 rounded-xl border border-zinc-800">
             <div className="flex justify-center items-center gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -72,13 +72,13 @@ export default function ReviewModal({ request, onClose, onSubmitReview }) {
                     className={`w-7 h-7 ${
                       (hoverRating || rating) >= star
                         ? 'fill-amber-400 text-amber-400'
-                        : 'text-slate-300'
+                        : 'text-zinc-700'
                     }`}
                   />
                 </button>
               ))}
             </div>
-            <p className="text-xs font-semibold text-slate-600 mt-2">
+            <p className="text-xs font-semibold text-zinc-300 mt-2">
               {rating === 5 && '⭐️⭐️⭐️⭐️⭐️ Outstanding service!'}
               {rating === 4 && '⭐️⭐️⭐️⭐️ Very good service'}
               {rating === 3 && '⭐️⭐️⭐️ Average experience'}
@@ -89,23 +89,23 @@ export default function ReviewModal({ request, onClose, onSubmitReview }) {
 
           {/* Comment text */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-zinc-300 mb-1">
               Feedback / Comment (Optional)
             </label>
             <textarea
               rows="3"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Technician arrived on time, was courteous, and fixed the problem quickly..."
-              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition resize-none"
+              placeholder="Technician arrived on time, was courteous, and did great work..."
+              className="w-full text-xs px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition resize-none"
             />
           </div>
 
           {/* Assigned Technician Info */}
           {request.provider_name && (
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 flex items-center justify-between text-xs text-slate-600">
-              <span>Technician: <strong>{request.provider_name}</strong></span>
-              <span className="text-[11px] text-slate-400">{request.category_name}</span>
+            <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span>Technician: <strong className="text-white">{request.provider_name}</strong></span>
+              <span className="text-[11px] text-zinc-400">{request.category_name}</span>
             </div>
           )}
 
@@ -113,14 +113,14 @@ export default function ReviewModal({ request, onClose, onSubmitReview }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-sm transition disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
               {submitting ? 'Submitting...' : 'Submit Review'}

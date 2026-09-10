@@ -147,6 +147,17 @@ export default function App() {
     }
   };
 
+  const handleConfirmCompletion = async (requestId) => {
+    try {
+      await api.confirmCompletion(requestId);
+      showToast('Service completion confirmed! Thank you.');
+      await loadPortalData();
+    } catch (err) {
+      showToast(err.message || 'Failed to confirm completion', 'error');
+      throw err;
+    }
+  };
+
   const handleSubmitReview = async (reviewData) => {
     await api.submitReview(reviewData);
     showToast('Thank you for your rating and feedback!');
@@ -179,18 +190,17 @@ export default function App() {
     }
   };
 
-
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-black text-white flex flex-col selection:bg-indigo-600 selection:text-white">
       
       {/* Toast Alert */}
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 animate-bounce-short">
           <div
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold ${
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold ${
               toast.type === 'error'
-                ? 'bg-red-900 text-white border-red-700'
-                : 'bg-slate-900 text-white border-slate-700'
+                ? 'bg-red-950 text-red-200 border-red-800'
+                : 'bg-zinc-900 text-white border-zinc-700'
             }`}
           >
             {toast.type === 'error' ? (
@@ -222,6 +232,7 @@ export default function App() {
                 loading={loading}
                 onCreateRequest={handleCreateRequest}
                 onCancelRequest={handleCancelRequest}
+                onConfirmCompletion={handleConfirmCompletion}
                 onSubmitReview={handleSubmitReview}
                 onRefresh={loadPortalData}
               />
@@ -251,49 +262,49 @@ export default function App() {
           </>
         ) : (
           /* Public / Unauthenticated Landing Showcase */
-          <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 mb-6">
+          <div className="max-w-4xl mx-auto px-4 py-16 text-center text-white">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-800 mb-6">
               <Sparkles className="w-3.5 h-3.5" />
               College Cloud Architecture Project
             </div>
 
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">
               Local Service Request <br />
-              <span className="text-indigo-600">Management System</span>
+              <span className="text-indigo-400">Management System</span>
             </h1>
 
-            <p className="mt-4 text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
+            <p className="mt-4 text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
               A minimalist, modern multi-role platform connecting residents with certified local specialists across 3 essential service categories.
             </p>
 
             {/* 3 Categories Showcase */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 max-w-3xl mx-auto text-left">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
+              <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
+                <div className="w-10 h-10 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-800/60 flex items-center justify-center mb-3">
                   <Zap className="w-5 h-5" />
                 </div>
-                <h2 className="font-bold text-slate-900 text-sm">Electrician</h2>
-                <p className="text-xs text-slate-500 mt-1">
+                <h2 className="font-bold text-white text-sm">Electrician</h2>
+                <p className="text-xs text-zinc-400 mt-1">
                   Wiring diagnostics, breaker panel repairs, and fixture installations.
                 </p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+              <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
+                <div className="w-10 h-10 rounded-xl bg-blue-950/60 text-blue-400 border border-blue-800/60 flex items-center justify-center mb-3">
                   <Wrench className="w-5 h-5" />
                 </div>
-                <h2 className="font-bold text-slate-900 text-sm">Plumber</h2>
-                <p className="text-xs text-slate-500 mt-1">
+                <h2 className="font-bold text-white text-sm">Plumber</h2>
+                <p className="text-xs text-zinc-400 mt-1">
                   Pipe leak fixing, valve replacements, and drain clearing.
                 </p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-3">
+              <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
+                <div className="w-10 h-10 rounded-xl bg-teal-950/60 text-teal-400 border border-teal-800/60 flex items-center justify-center mb-3">
                   <Wind className="w-5 h-5" />
                 </div>
-                <h2 className="font-bold text-slate-900 text-sm">AC Repair</h2>
-                <p className="text-xs text-slate-500 mt-1">
+                <h2 className="font-bold text-white text-sm">AC Repair</h2>
+                <p className="text-xs text-zinc-400 mt-1">
                   HVAC seasonal maintenance, filter washing, and gas refill.
                 </p>
               </div>
@@ -304,7 +315,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setAuthModalOpen(true)}
-                className="px-6 py-3 text-sm font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition inline-flex items-center gap-2"
+                className="px-6 py-3 text-sm font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition inline-flex items-center gap-2 cursor-pointer"
               >
                 Sign In / Register
                 <ArrowRight className="w-4 h-4" />
@@ -315,19 +326,19 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+      <footer className="border-t border-zinc-800 bg-zinc-950 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">LocalService System</span>
+            <span className="font-semibold text-zinc-300">LocalService System</span>
             <span>•</span>
             <span>React + Express + Supabase PostgreSQL</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="inline-flex items-center gap-1">
-              <Server className="w-3.5 h-3.5 text-slate-400" /> Port 8080 (API)
+              <Server className="w-3.5 h-3.5 text-zinc-500" /> Port 8080 (API)
             </span>
             <span className="inline-flex items-center gap-1">
-              <Cloud className="w-3.5 h-3.5 text-indigo-500" /> Port 5173 (Vite)
+              <Cloud className="w-3.5 h-3.5 text-indigo-400" /> Port 5173 (Vite)
             </span>
           </div>
         </div>

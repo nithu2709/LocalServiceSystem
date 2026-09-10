@@ -39,7 +39,7 @@ router.post('/', authenticateUser, requireRole('CUSTOMER', 'ADMIN'), async (req,
         u.name AS provider_name,
         u.phone AS provider_phone,
         u.email AS provider_email,
-        COUNT(CASE WHEN sr.status IN ('PENDING', 'ACCEPTED', 'ASSIGNED', 'IN_PROGRESS') AND a.completed_at IS NULL THEN 1 END) AS active_tasks
+        COUNT(CASE WHEN sr.status IN ('PENDING', 'ACCEPTED', 'ASSIGNED', 'IN_PROGRESS', 'Pending Customer Confirmation', 'PENDING_CUSTOMER_CONFIRMATION') AND a.completed_at IS NULL THEN 1 END) AS active_tasks
       FROM service_providers sp
       JOIN users u ON sp.user_id = u.id
       LEFT JOIN assignments a ON sp.id = a.provider_id
@@ -254,14 +254,36 @@ router.patch('/:id/status', authenticateUser, async (req, res) => {
     const requestId = parseInt(req.params.id, 10);
     const { status } = req.body;
 
-    const allowedStatuses = ['PENDING', 'ACCEPTED', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
-    if (!status || !allowedStatuses.includes(status.toUpperCase())) {
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required.' });
+    }
+
+    // Normalize status string
+    let normalizedStatus = status.trim();
+    if (
+      normalizedStatus.toUpperCase() === 'PENDING_CUSTOMER_CONFIRMATION' ||
+      normalizedStatus.toUpperCase() === 'PENDING CUSTOMER CONFIRMATION'
+    ) {
+      normalizedStatus = 'Pending Customer Confirmation';
+    } else {
+      normalizedStatus = normalizedStatus.toUpperCase();
+    }
+
+    const allowedStatuses = [
+      'PENDING',
+      'ACCEPTED',
+      'ASSIGNED',
+      'IN_PROGRESS',
+      'Pending Customer Confirmation',
+      'COMPLETED',
+      'CANCELLED',
+    ];
+
+    if (!allowedStatuses.includes(normalizedStatus)) {
       return res.status(400).json({
         error: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}`,
       });
     }
-
-    const normalizedStatus = status.toUpperCase();
 
     // Check request existence
     const requestCheck = await query('SELECT * FROM service_requests WHERE id = $1', [requestId]);
@@ -271,25 +293,43 @@ router.patch('/:id/status', authenticateUser, async (req, res) => {
 
     const currentReq = requestCheck.rows[0];
 
-    // Check permissions
+    // Check permissions and workflow rules
     if (req.user.role === 'CUSTOMER') {
-      // Customer can only cancel their own pending request
-      if (currentReq.customer_id !== req.user.id || normalizedStatus !== 'CANCELLED') {
-        return res.status(403).json({ error: 'Customers can only cancel their own requests.' });
+      if (normalizedStatus === 'CANCELLED') {
+        if (currentReq.customer_id !== req.user.id || currentReq.status !== 'PENDING') {
+          return res.status(403).json({ error: 'Customers can only cancel their own pending requests.' });
+        }
+      } else if (normalizedStatus === 'COMPLETED') {
+        // Customer confirms completion!
+        if (currentReq.customer_id !== req.user.id) {
+          return res.status(403).json({ error: 'You can only confirm completion for your own service requests.' });
+        }
+        if (
+          currentReq.status !== 'Pending Customer Confirmation' &&
+          currentReq.status !== 'PENDING_CUSTOMER_CONFIRMATION'
+        ) {
+          return res.status(400).json({
+            error: 'Request is not currently awaiting customer confirmation.',
+          });
+        }
+      } else {
+        return res.status(403).json({ error: 'Customers can only cancel pending requests or confirm completion.' });
       }
     } else if (req.user.role === 'PROVIDER') {
-      // If provider accepts a pending job, assign them automatically
+      // Providers CANNOT finalize a job directly to COMPLETED; change to 'Pending Customer Confirmation'
+      if (normalizedStatus === 'COMPLETED') {
+        normalizedStatus = 'Pending Customer Confirmation';
+      }
+
       if (normalizedStatus === 'ACCEPTED' || normalizedStatus === 'IN_PROGRESS') {
         if (!req.user.provider) {
           return res.status(400).json({ error: 'User is not registered as a service provider.' });
         }
 
-        // Verify category matches
         if (req.user.provider.category_id !== currentReq.category_id) {
           return res.status(403).json({ error: 'You can only accept requests matching your service category.' });
         }
 
-        // Check if assignment exists
         const assignCheck = await query('SELECT id FROM assignments WHERE request_id = $1', [requestId]);
         if (assignCheck.rows.length === 0) {
           await query(

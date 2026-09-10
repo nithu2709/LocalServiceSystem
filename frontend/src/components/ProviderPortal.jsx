@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   ToggleLeft,
   ToggleRight,
-  Filter
+  Filter,
+  CheckCheck
 } from 'lucide-react';
 
 export default function ProviderPortal({ 
@@ -36,46 +37,54 @@ export default function ProviderPortal({
   const getCategoryIcon = (catName) => {
     switch (catName) {
       case 'Electrician':
-        return <Zap className="w-4 h-4 text-amber-500" />;
+        return <Zap className="w-4 h-4 text-amber-400" />;
       case 'Plumber':
-        return <Wrench className="w-4 h-4 text-blue-500" />;
+        return <Wrench className="w-4 h-4 text-blue-400" />;
       case 'AC Repair':
-        return <Wind className="w-4 h-4 text-teal-500" />;
+        return <Wind className="w-4 h-4 text-teal-400" />;
       default:
-        return <Wrench className="w-4 h-4 text-slate-500" />;
+        return <Wrench className="w-4 h-4 text-zinc-400" />;
     }
   };
 
   const getStatusBadge = (status) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock className="w-3 h-3" /> Unassigned
-          </span>
-        );
-      case 'ACCEPTED':
-      case 'ASSIGNED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-            <CheckCircle2 className="w-3 h-3" /> Assigned
-          </span>
-        );
-      case 'IN_PROGRESS':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <RefreshCw className="w-3 h-3 animate-spin" /> In Progress
-          </span>
-        );
-      case 'COMPLETED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3" /> Completed
-          </span>
-        );
-      default:
-        return <span className="text-xs text-slate-500">{status}</span>;
+    const s = (status || '').toUpperCase();
+    if (s === 'PENDING') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/50 text-amber-300 border border-amber-800">
+          <Clock className="w-3 h-3" /> Unassigned
+        </span>
+      );
     }
+    if (s === 'ACCEPTED' || s === 'ASSIGNED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-950/50 text-blue-300 border border-blue-800">
+          <CheckCircle2 className="w-3 h-3" /> Assigned
+        </span>
+      );
+    }
+    if (s === 'IN_PROGRESS') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-950/50 text-indigo-300 border border-indigo-800">
+          <RefreshCw className="w-3 h-3 animate-spin" /> In Progress
+        </span>
+      );
+    }
+    if (s.includes('CONFIRMATION')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-950/60 text-purple-300 border border-purple-800 animate-pulse">
+          <Clock className="w-3 h-3" /> Awaiting Confirmation
+        </span>
+      );
+    }
+    if (s === 'COMPLETED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/50 text-emerald-300 border border-emerald-800">
+          <CheckCircle2 className="w-3 h-3" /> Completed
+        </span>
+      );
+    }
+    return <span className="text-xs text-zinc-400">{status}</span>;
   };
 
   const handleStatusChange = async (requestId, nextStatus) => {
@@ -98,27 +107,29 @@ export default function ProviderPortal({
 
   const displayedRequests = (activeTab === 'available' ? availableRequests : myAssignedRequests).filter(r => {
     if (statusFilter === 'ALL') return true;
+    const s = (r.status || '').toUpperCase();
+    if (statusFilter === 'CONFIRMATION') return s.includes('CONFIRMATION');
     return r.status === statusFilter;
   });
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 text-white">
       
       {/* Provider Header Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 shadow-xl p-6 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-800">
               {getCategoryIcon(providerCategory)}
               {providerCategory} Specialist
             </span>
-            <span className="text-xs text-slate-400">•</span>
-            <span className="text-xs text-slate-500">{currentUser?.provider?.location || 'Local Area'}</span>
+            <span className="text-xs text-zinc-600">•</span>
+            <span className="text-xs text-zinc-400">{currentUser?.provider?.location || 'Local Area'}</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">
+          <h1 className="text-2xl font-bold text-white mt-2">
             {currentUser?.name || 'Technician'}
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-zinc-400 mt-0.5">
             {currentUser?.provider?.experience || 'Licensed & Certified Field Technician'}
           </p>
         </div>
@@ -128,13 +139,13 @@ export default function ProviderPortal({
           <button
             type="button"
             onClick={() => onToggleAvailability(!isAvailable)}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
               isAvailable 
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800 hover:bg-emerald-900/60'
+                : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700'
             }`}
           >
-            {isAvailable ? <ToggleRight className="w-5 h-5 text-emerald-600" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
+            {isAvailable ? <ToggleRight className="w-5 h-5 text-emerald-400" /> : <ToggleLeft className="w-5 h-5 text-zinc-500" />}
             <span>Status: {isAvailable ? 'Available for Jobs' : 'On Break / Busy'}</span>
           </button>
 
@@ -142,7 +153,7 @@ export default function ProviderPortal({
             type="button"
             onClick={onRefresh}
             title="Refresh jobs"
-            className="p-2 text-slate-500 hover:text-slate-800 rounded-xl border border-slate-200 hover:bg-slate-50 transition"
+            className="p-2 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-800 transition cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -150,15 +161,15 @@ export default function ProviderPortal({
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
           <button
             type="button"
             onClick={() => { setActiveTab('assigned'); setStatusFilter('ALL'); }}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
               activeTab === 'assigned'
-                ? 'bg-white text-slate-900 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             My Assigned Jobs ({myAssignedRequests.length})
@@ -166,10 +177,10 @@ export default function ProviderPortal({
           <button
             type="button"
             onClick={() => { setActiveTab('available'); setStatusFilter('ALL'); }}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
               activeTab === 'available'
-                ? 'bg-white text-slate-900 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             Available Jobs ({availableRequests.length})
@@ -178,19 +189,25 @@ export default function ProviderPortal({
 
         {/* Status Filter for Assigned Tab */}
         {activeTab === 'assigned' && (
-          <div className="flex items-center gap-1">
-            {['ALL', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].map((st) => (
+          <div className="flex flex-wrap items-center gap-1">
+            {[
+              { id: 'ALL', label: 'All' },
+              { id: 'ACCEPTED', label: 'Assigned' },
+              { id: 'IN_PROGRESS', label: 'In Progress' },
+              { id: 'CONFIRMATION', label: 'Awaiting Approval' },
+              { id: 'COMPLETED', label: 'Completed' }
+            ].map((st) => (
               <button
-                key={st}
+                key={st.id}
                 type="button"
-                onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-                  statusFilter === st
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                onClick={() => setStatusFilter(st.id)}
+                className={`px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer ${
+                  statusFilter === st.id
+                    ? 'bg-indigo-600 text-white font-semibold'
+                    : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
                 }`}
               >
-                {st === 'ALL' ? 'All' : st.replace('_', ' ')}
+                {st.label}
               </button>
             ))}
           </div>
@@ -199,19 +216,19 @@ export default function ProviderPortal({
 
       {/* Job Cards Feed */}
       {loading ? (
-        <div className="p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+        <div className="p-12 text-center text-zinc-400 bg-zinc-900 rounded-2xl border border-zinc-800">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
           <p className="text-xs font-medium">Loading service requests...</p>
         </div>
       ) : displayedRequests.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+        <div className="p-12 text-center bg-zinc-900 rounded-2xl border border-zinc-800 shadow-lg">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-950 text-zinc-400 flex items-center justify-center mx-auto mb-3 border border-zinc-800">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-bold text-slate-900">
+          <h3 className="text-sm font-bold text-white">
             {activeTab === 'available' ? 'No pending jobs in your category' : 'No jobs found in this view'}
           </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+          <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
             {activeTab === 'available' 
               ? `All ${providerCategory} requests have been claimed or none are pending right now.` 
               : 'You currently have no jobs matching the selected filter.'}
@@ -222,19 +239,25 @@ export default function ProviderPortal({
           {displayedRequests.map((req) => {
             const isUpdating = updatingId === req.id;
             const hasReview = !!req.review_id;
+            const s = (req.status || '').toUpperCase();
+            const isAwaitingConfirmation = s.includes('CONFIRMATION');
 
             return (
               <div
                 key={req.id}
-                className="bg-white rounded-2xl p-6 border border-slate-200/80 hover:border-slate-300 transition shadow-2xs space-y-4"
+                className={`bg-zinc-900 rounded-2xl p-6 border transition shadow-lg space-y-4 ${
+                  isAwaitingConfirmation 
+                    ? 'border-purple-600/70 bg-gradient-to-b from-zinc-900 to-purple-950/20' 
+                    : 'border-zinc-800 hover:border-zinc-700'
+                }`}
               >
                 {/* Header info */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                    <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800">
                       #{req.id}
                     </span>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-zinc-400">
                       Requested on {new Date(req.created_at).toLocaleDateString()}
                     </span>
                   </div>
@@ -245,56 +268,56 @@ export default function ProviderPortal({
 
                 {/* Job Title & Description */}
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">{req.title}</h3>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">{req.description}</p>
+                  <h3 className="text-base font-bold text-white">{req.title}</h3>
+                  <p className="text-xs text-zinc-300 mt-1 leading-relaxed">{req.description}</p>
                 </div>
 
                 {/* Customer & Location Info */}
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-700">
+                <div className="p-3.5 bg-zinc-950 rounded-xl border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-zinc-300">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-slate-400 shrink-0" />
+                    <User className="w-4 h-4 text-zinc-500 shrink-0" />
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Customer</span>
-                      <span className="font-semibold">{req.customer_name || 'Alex Morgan'}</span>
+                      <span className="text-zinc-500 block text-[10px] uppercase">Customer</span>
+                      <span className="font-semibold text-white">{req.customer_name || 'Customer'}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                    <Phone className="w-4 h-4 text-zinc-500 shrink-0" />
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Contact</span>
-                      <span>{req.customer_phone || 'Customer Phone on file'}</span>
+                      <span className="text-zinc-500 block text-[10px] uppercase">Contact</span>
+                      <span className="text-zinc-300">{req.customer_phone || req.customer_email || 'Contact on file'}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 sm:col-span-2">
-                    <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                    <MapPin className="w-4 h-4 text-zinc-500 shrink-0" />
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Service Address</span>
-                      <span className="font-medium">{req.location}</span>
+                      <span className="text-zinc-500 block text-[10px] uppercase">Service Address</span>
+                      <span className="font-medium text-white">{req.location}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Customer Review (if job completed and reviewed) */}
                 {hasReview && (
-                  <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900">
-                    <div className="flex items-center gap-1.5 font-bold mb-1 text-amber-900">
+                  <div className="p-3 bg-amber-950/30 border border-amber-900/60 rounded-xl text-xs text-amber-200">
+                    <div className="flex items-center gap-1.5 font-bold mb-1 text-amber-300">
                       <div className="flex text-amber-400">
                         {[...Array(req.rating || 5)].map((_, i) => (
-                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
+                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                         ))}
                       </div>
                       <span>Customer Review ({req.rating}/5)</span>
                     </div>
                     {req.review_comment && (
-                      <p className="italic text-amber-800">"{req.review_comment}"</p>
+                      <p className="italic text-amber-200/90">"{req.review_comment}"</p>
                     )}
                   </div>
                 )}
 
                 {/* Status Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-zinc-800">
                   
                   {/* PENDING -> Accept Job */}
                   {req.status === 'PENDING' && (
@@ -302,7 +325,7 @@ export default function ProviderPortal({
                       type="button"
                       disabled={isUpdating}
                       onClick={() => handleStatusChange(req.id, 'ACCEPTED')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-2xs transition disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       {isUpdating ? 'Accepting...' : 'Claim & Accept Job'}
@@ -315,31 +338,39 @@ export default function ProviderPortal({
                       type="button"
                       disabled={isUpdating}
                       onClick={() => handleStatusChange(req.id, 'IN_PROGRESS')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-2xs transition disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5" />
                       {isUpdating ? 'Updating...' : 'Start Work (In Progress)'}
                     </button>
                   )}
 
-                  {/* IN_PROGRESS -> Completed */}
+                  {/* IN_PROGRESS -> Finish Work & Request Confirmation */}
                   {req.status === 'IN_PROGRESS' && (
                     <button
                       type="button"
                       disabled={isUpdating}
-                      onClick={() => handleStatusChange(req.id, 'COMPLETED')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-2xs transition disabled:opacity-50"
+                      onClick={() => handleStatusChange(req.id, 'Pending Customer Confirmation')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      {isUpdating ? 'Completing...' : 'Mark Job Completed'}
+                      {isUpdating ? 'Submitting...' : 'Finish Work & Request Confirmation'}
                     </button>
+                  )}
+
+                  {/* Awaiting Customer Approval Banner */}
+                  {isAwaitingConfirmation && (
+                    <div className="flex items-center gap-2 text-xs text-purple-300 font-semibold bg-purple-950/60 px-3.5 py-2 rounded-xl border border-purple-800">
+                      <Clock className="w-4 h-4 text-purple-400 animate-pulse" />
+                      Work Finished — Awaiting Customer Approval
+                    </div>
                   )}
 
                   {/* COMPLETED badge */}
                   {req.status === 'COMPLETED' && (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Service Successfully Completed
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-semibold bg-emerald-950/50 px-3 py-1.5 rounded-lg border border-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      Job Officially Completed & Approved
                     </div>
                   )}
 

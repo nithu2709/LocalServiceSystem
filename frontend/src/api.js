@@ -76,12 +76,22 @@ export const api = {
     return data;
   },
 
-  getCurrentUser: async () => {
-    return request('/auth/me');
+  verifyEmail: async (token) => {
+    return request('/auth/verify-email', {
+      method: 'POST',
+      body: { token },
+    });
   },
 
-  getDemoUsers: async () => {
-    return request('/auth/demo-users');
+  resendVerification: async (email) => {
+    return request('/auth/resend-verification', {
+      method: 'POST',
+      body: { email },
+    });
+  },
+
+  getCurrentUser: async () => {
+    return request('/auth/me');
   },
 
   logout: () => {
@@ -129,6 +139,13 @@ export const api = {
     return request(`/requests/${id}/status`, {
       method: 'PATCH',
       body: { status },
+    });
+  },
+
+  confirmCompletion: async (id) => {
+    return request(`/requests/${id}/status`, {
+      method: 'PATCH',
+      body: { status: 'COMPLETED' },
     });
   },
 

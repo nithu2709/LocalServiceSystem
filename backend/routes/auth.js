@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { query } = require('../db');
 const { authenticateUser, JWT_SECRET } = require('../middleware/auth');
 const { ALLOWED_CATEGORIES } = require('./categories');
+const { sendVerificationEmail } = require('../emailService');
 
 /**
  * Helper to generate JWT token
@@ -19,7 +21,7 @@ const generateToken = (user) => {
 
 /**
  * POST /api/auth/register
- * Register a new user (Customer, Provider, or Admin)
+ * Register a new user (Customer or Provider) with required email verification
  */
 router.post('/register', async (req, res) => {
   try {
@@ -61,12 +63,15 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // Insert user
+    // Generate secure email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    // Insert user with is_verified = false and 24h expiration
     const userInsert = await query(
-      `INSERT INTO users (name, email, password_hash, phone, role)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, email, phone, role, created_at`,
-      [name.trim(), email.toLowerCase().trim(), password_hash, phone || null, normalizedRole]
+      `INSERT INTO users (name, email, password_hash, phone, role, is_verified, verification_token, verification_token_expires_at)
+       VALUES ($1, $2, $3, $4, $5, FALSE, $6, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+       RETURNING id, name, email, phone, role, is_verified, created_at`,
+      [name.trim(), email.toLowerCase().trim(), password_hash, phone || null, normalizedRole, verificationToken]
     );
 
     const newUser = userInsert.rows[0];
@@ -82,13 +87,21 @@ router.post('/register', async (req, res) => {
       newUser.provider = providerInsert.rows[0];
     }
 
-    const token = generateToken(newUser);
+    // Dispatch verification email
+    await sendVerificationEmail(newUser.email, newUser.name, verificationToken);
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful!',
-      token,
-      user: newUser,
+      requiresVerification: true,
+      message: 'Registration successful! We have sent a confirmation email to verify your address. Please verify your email before logging in.',
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        is_verified: false,
+      },
+      verificationToken, // Provided for instant demo/testing fallback
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -97,8 +110,180 @@ router.post('/register', async (req, res) => {
 });
 
 /**
+ * GET /api/auth/verify-email
+ * Clickable verification link handler (returns clean confirmation HTML)
+ */
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><title>Verification Failed</title><style>body{background:#09090b;color:#f4f4f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body><div style="background:#18181b;padding:32px;border-radius:16px;border:1px solid #27272a;text-align:center;max-width:400px;"><h2 style="color:#ef4444;">Invalid Verification Link</h2><p style="color:#a1a1aa;">The verification token is missing or malformed.</p></div></body></html>
+      `);
+    }
+
+    const check = await query(
+      `SELECT id, name, email, is_verified, verification_token_expires_at 
+       FROM users 
+       WHERE verification_token = $1`,
+      [token]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><title>Verification Failed</title><style>body{background:#09090b;color:#f4f4f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body><div style="background:#18181b;padding:32px;border-radius:16px;border:1px solid #27272a;text-align:center;max-width:400px;"><h2 style="color:#ef4444;">Token Expired or Invalid</h2><p style="color:#a1a1aa;">This verification link is invalid or has already been used.</p></div></body></html>
+      `);
+    }
+
+    const user = check.rows[0];
+
+    // Check expiration
+    if (user.verification_token_expires_at && new Date() > new Date(user.verification_token_expires_at)) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><title>Verification Expired</title><style>body{background:#09090b;color:#f4f4f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body><div style="background:#18181b;padding:32px;border-radius:16px;border:1px solid #27272a;text-align:center;max-width:400px;"><h2 style="color:#ef4444;">Link Expired</h2><p style="color:#a1a1aa;">This verification link has expired. Please sign in and request a new link.</p></div></body></html>
+      `);
+    }
+
+    // Mark user as verified
+    await query(
+      `UPDATE users 
+       SET is_verified = TRUE, verification_token = NULL, verification_token_expires_at = NULL 
+       WHERE id = $1`,
+      [user.id]
+    );
+
+    const clientUrl = process.env.CLIENT_URL || 'https://localservicesystem.vercel.app';
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Email Verified - LocalService</title>
+        <style>
+          body { background: #09090b; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #18181b; padding: 40px; border-radius: 20px; border: 1px solid #27272a; text-align: center; max-width: 440px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+          .badge { width: 56px; height: 56px; border-radius: 50%; background: rgba(16, 185, 129, 0.1); color: #10b981; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px; border: 1px solid rgba(16, 185, 129, 0.2); }
+          h2 { color: #ffffff; margin: 0 0 10px; font-size: 22px; font-weight: 700; }
+          p { color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 0 0 28px; }
+          .btn { background: #6366f1; color: #ffffff; padding: 12px 28px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 14px; display: inline-block; transition: background 0.2s; }
+          .btn:hover { background: #4f46e5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="badge">✓</div>
+          <h2>Email Verified Successfully!</h2>
+          <p>Thank you, <strong>${user.name}</strong>. Your email has been confirmed. You can now log into your LocalService account.</p>
+          <a href="${clientUrl}" class="btn">Proceed to Sign In</a>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('Verify email error:', err);
+    res.status(500).send('Internal Server Error during verification.');
+  }
+});
+
+/**
+ * POST /api/auth/verify-email
+ * API endpoint to verify token via JSON body
+ */
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token is required.' });
+    }
+
+    const check = await query(
+      `SELECT id, name, email, is_verified 
+       FROM users 
+       WHERE verification_token = $1`,
+      [token.trim()]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired verification token.' });
+    }
+
+    const user = check.rows[0];
+
+    await query(
+      `UPDATE users 
+       SET is_verified = TRUE, verification_token = NULL, verification_token_expires_at = NULL 
+       WHERE id = $1`,
+      [user.id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully! You may now sign in.',
+    });
+  } catch (err) {
+    console.error('API verification error:', err);
+    res.status(500).json({ error: 'Failed to verify email. ' + err.message });
+  }
+});
+
+/**
+ * POST /api/auth/resend-verification
+ * Resend verification email
+ */
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required.' });
+    }
+
+    const check = await query('SELECT id, name, email, is_verified FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    const user = check.rows[0];
+    if (user.is_verified) {
+      return res.status(400).json({ error: 'This account email is already verified. You can log in directly.' });
+    }
+
+    const newToken = crypto.randomBytes(32).toString('hex');
+    await query(
+      `UPDATE users 
+       SET verification_token = $1, verification_token_expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours' 
+       WHERE id = $2`,
+      [newToken, user.id]
+    );
+
+    await sendVerificationEmail(user.email, user.name, newToken);
+
+    res.json({
+      success: true,
+      message: 'A new verification link has been dispatched to your email address.',
+      verificationToken: newToken,
+    });
+  } catch (err) {
+    console.error('Resend verification error:', err);
+    res.status(500).json({ error: 'Failed to resend verification email.' });
+  }
+});
+
+/**
  * POST /api/auth/login
- * Authenticate with email & password
+ * Authenticate with email & password (enforces is_verified = TRUE)
  */
 router.post('/login', async (req, res) => {
   try {
@@ -109,7 +294,7 @@ router.post('/login', async (req, res) => {
     }
 
     const result = await query(
-      'SELECT id, name, email, password_hash, phone, role, created_at FROM users WHERE email = $1',
+      'SELECT id, name, email, password_hash, phone, role, is_verified, created_at FROM users WHERE email = $1',
       [email.toLowerCase().trim()]
     );
 
@@ -133,6 +318,15 @@ router.post('/login', async (req, res) => {
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    // Enforce email verification check!
+    if (user.is_verified === false) {
+      return res.status(403).json({
+        error: 'Your email address has not been verified yet. Please check your inbox for the confirmation email before logging in.',
+        unverified: true,
+        email: user.email,
+      });
     }
 
     // Attach provider info if role is PROVIDER
@@ -173,31 +367,6 @@ router.get('/me', authenticateUser, (req, res) => {
     success: true,
     user: req.user,
   });
-});
-
-/**
- * GET /api/auth/demo-users
- * Returns list of available demo users for 1-click quick switching
- */
-router.get('/demo-users', async (req, res) => {
-  try {
-    const usersRes = await query(
-      `SELECT u.id, u.name, u.email, u.role, u.phone,
-              sp.id AS provider_id, sp.category_id, sc.name AS category_name, sp.availability
-       FROM users u
-       LEFT JOIN service_providers sp ON u.id = sp.user_id
-       LEFT JOIN service_categories sc ON sp.category_id = sc.id
-       ORDER BY u.id ASC`
-    );
-
-    res.json({
-      success: true,
-      users: usersRes.rows,
-    });
-  } catch (error) {
-    console.error('Error fetching demo users:', error);
-    res.status(500).json({ error: 'Failed to fetch demo users.' });
-  }
 });
 
 module.exports = router;
