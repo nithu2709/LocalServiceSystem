@@ -137,13 +137,25 @@ export default function App() {
     return res;
   };
 
+  const handleUpdateRequest = async (requestId, requestData) => {
+    try {
+      await api.updateRequest(requestId, requestData);
+      showToast('Service request updated successfully!');
+      await loadPortalData();
+    } catch (err) {
+      showToast(err.message || 'Failed to update request', 'error');
+      throw err;
+    }
+  };
+
   const handleCancelRequest = async (requestId) => {
     try {
-      await api.updateRequestStatus(requestId, 'CANCELLED');
-      showToast('Service request cancelled.');
+      await api.deleteRequest(requestId);
+      showToast('Service request cancelled and removed.');
       await loadPortalData();
     } catch (err) {
       showToast(err.message || 'Failed to cancel request', 'error');
+      throw err;
     }
   };
 
@@ -231,6 +243,7 @@ export default function App() {
                 requests={requests}
                 loading={loading}
                 onCreateRequest={handleCreateRequest}
+                onUpdateRequest={handleUpdateRequest}
                 onCancelRequest={handleCancelRequest}
                 onConfirmCompletion={handleConfirmCompletion}
                 onSubmitReview={handleSubmitReview}

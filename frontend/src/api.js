@@ -135,6 +135,19 @@ export const api = {
     });
   },
 
+  updateRequest: async (id, requestData) => {
+    return request(`/requests/${id}`, {
+      method: 'PUT',
+      body: requestData,
+    });
+  },
+
+  deleteRequest: async (id) => {
+    return request(`/requests/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   updateRequestStatus: async (id, status) => {
     return request(`/requests/${id}/status`, {
       method: 'PATCH',

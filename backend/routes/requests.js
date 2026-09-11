@@ -296,7 +296,8 @@ router.patch('/:id/status', authenticateUser, async (req, res) => {
     // Check permissions and workflow rules
     if (req.user.role === 'CUSTOMER') {
       if (normalizedStatus === 'CANCELLED') {
-        if (currentReq.customer_id !== req.user.id || currentReq.status !== 'PENDING') {
+        const currentStatusUpper = (currentReq.status || '').toUpperCase().trim();
+        if (currentReq.customer_id !== req.user.id || (currentStatusUpper !== 'PENDING' && currentStatusUpper !== 'ASSIGNED')) {
           return res.status(403).json({ error: 'Customers can only cancel their own pending requests.' });
         }
       } else if (normalizedStatus === 'COMPLETED') {
@@ -367,6 +368,173 @@ router.patch('/:id/status', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Error updating status:', error);
     res.status(500).json({ error: 'Failed to update request status. ' + error.message });
+  }
+});
+
+/**
+ * PUT /api/requests/:id
+ * Customer updates their own service request (strict validation: only allowed while in pending status)
+ */
+router.put('/:id', authenticateUser, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id, 10);
+    if (isNaN(requestId)) {
+      return res.status(400).json({ error: 'Invalid request ID.' });
+    }
+
+    const { title, description, location, preferred_date, category_id } = req.body;
+
+    const reqCheck = await query('SELECT * FROM service_requests WHERE id = $1', [requestId]);
+    if (reqCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found.' });
+    }
+
+    const currentReq = reqCheck.rows[0];
+
+    // Ownership check: customer can only modify their own requests (admin permitted)
+    if (req.user.role === 'CUSTOMER' && currentReq.customer_id !== req.user.id) {
+      return res.status(403).json({ error: 'You are only authorized to modify your own service requests.' });
+    }
+
+    // Strict validation: check status
+    const statusUpper = (currentReq.status || '').toUpperCase().trim();
+    if (statusUpper === 'IN_PROGRESS' || statusUpper.includes('CONFIRMATION') || statusUpper === 'COMPLETED') {
+      return res.status(400).json({
+        error: `Cannot modify request: Work is currently '${currentReq.status}'. Edits are strictly forbidden once work is in-progress or completed.`,
+      });
+    }
+
+    if (statusUpper !== 'PENDING' && statusUpper !== 'ASSIGNED') {
+      return res.status(400).json({
+        error: `Service requests can only be modified while in pending status. Current status is '${currentReq.status}'.`,
+      });
+    }
+
+    // Category validation if provided
+    let newCategoryId = currentReq.category_id;
+    if (category_id !== undefined && category_id !== currentReq.category_id) {
+      const catCheck = await query(
+        'SELECT id, name FROM service_categories WHERE id = $1 AND name = ANY($2)',
+        [category_id, ALLOWED_CATEGORIES]
+      );
+      if (catCheck.rows.length === 0) {
+        return res.status(400).json({
+          error: `Invalid category. Only ${ALLOWED_CATEGORIES.join(', ')} are supported.`,
+        });
+      }
+      newCategoryId = parseInt(category_id, 10);
+    }
+
+    const newTitle = title !== undefined ? title.trim() : currentReq.title;
+    const newDescription = description !== undefined ? description.trim() : currentReq.description;
+    const newLocation = location !== undefined ? location.trim() : currentReq.location;
+    const newPreferredDate = preferred_date !== undefined ? (preferred_date || null) : currentReq.preferred_date;
+
+    if (!newTitle || !newDescription || !newLocation) {
+      return res.status(400).json({ error: 'Title, description, and location cannot be empty.' });
+    }
+
+    // If category changed and provider had been auto-assigned, re-evaluate provider matching
+    if (newCategoryId !== currentReq.category_id) {
+      await query('DELETE FROM assignments WHERE request_id = $1', [requestId]);
+
+      const providerQuery = `
+        SELECT 
+          sp.id AS provider_id,
+          sp.user_id,
+          u.name AS provider_name
+        FROM service_providers sp
+        JOIN users u ON sp.user_id = u.id
+        LEFT JOIN assignments a ON sp.id = a.provider_id
+        LEFT JOIN service_requests sr ON a.request_id = sr.id
+        WHERE sp.category_id = $1
+        GROUP BY sp.id, sp.user_id, u.name
+        ORDER BY 
+          (CASE WHEN sp.availability = true THEN 0 ELSE 1 END) ASC,
+          COUNT(CASE WHEN sr.status IN ('PENDING', 'ACCEPTED', 'ASSIGNED', 'IN_PROGRESS', 'Pending Customer Confirmation', 'PENDING_CUSTOMER_CONFIRMATION') AND a.completed_at IS NULL THEN 1 END) ASC,
+          sp.id ASC
+        LIMIT 1
+      `;
+      const provResult = await query(providerQuery, [newCategoryId]);
+      if (provResult.rows.length > 0) {
+        await query(
+          'INSERT INTO assignments (request_id, provider_id, assigned_at) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+          [requestId, provResult.rows[0].provider_id]
+        );
+      }
+    }
+
+    const updateResult = await query(
+      `UPDATE service_requests 
+       SET title = $1, description = $2, location = $3, preferred_date = $4, category_id = $5, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $6 
+       RETURNING *`,
+      [newTitle, newDescription, newLocation, newPreferredDate, newCategoryId, requestId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Service request updated successfully.',
+      request: updateResult.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating service request:', error);
+    res.status(500).json({ error: 'Failed to update service request. ' + error.message });
+  }
+});
+
+/**
+ * DELETE /api/requests/:id
+ * Customer cancels and deletes their own service request (strict validation: only allowed while in pending status)
+ */
+router.delete('/:id', authenticateUser, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id, 10);
+    if (isNaN(requestId)) {
+      return res.status(400).json({ error: 'Invalid request ID.' });
+    }
+
+    const reqCheck = await query('SELECT * FROM service_requests WHERE id = $1', [requestId]);
+    if (reqCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found.' });
+    }
+
+    const currentReq = reqCheck.rows[0];
+
+    // Ownership check: customer can only delete their own requests (admin permitted)
+    if (req.user.role === 'CUSTOMER' && currentReq.customer_id !== req.user.id) {
+      return res.status(403).json({ error: 'You are only authorized to delete your own service requests.' });
+    }
+
+    // Strict validation: check status
+    const statusUpper = (currentReq.status || '').toUpperCase().trim();
+    if (statusUpper === 'IN_PROGRESS' || statusUpper.includes('CONFIRMATION') || statusUpper === 'COMPLETED') {
+      return res.status(400).json({
+        error: `Cannot delete request: Work is currently '${currentReq.status}'. Deletions are strictly forbidden once work is in-progress or completed.`,
+      });
+    }
+
+    if (statusUpper !== 'PENDING' && statusUpper !== 'ASSIGNED') {
+      return res.status(400).json({
+        error: `Service requests can only be deleted while in pending status. Current status is '${currentReq.status}'.`,
+      });
+    }
+
+    // Clean up dependent assignments and reviews
+    await query('DELETE FROM assignments WHERE request_id = $1', [requestId]);
+    await query('DELETE FROM reviews WHERE request_id = $1', [requestId]);
+
+    // Delete the request
+    await query('DELETE FROM service_requests WHERE id = $1', [requestId]);
+
+    res.json({
+      success: true,
+      message: 'Service request cancelled and deleted successfully.',
+      deletedId: requestId,
+    });
+  } catch (error) {
+    console.error('Error deleting service request:', error);
+    res.status(500).json({ error: 'Failed to delete service request. ' + error.message });
   }
 });
 

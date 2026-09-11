@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { 
+  Edit3,
+  Trash2,
   Zap, 
   Wrench, 
   Wind, 
@@ -18,6 +20,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import ReviewModal from './ReviewModal';
+import EditRequestModal from './EditRequestModal';
 
 export default function CustomerPortal({ 
   currentUser, 
@@ -25,6 +28,7 @@ export default function CustomerPortal({
   requests, 
   loading, 
   onCreateRequest, 
+  onUpdateRequest,
   onCancelRequest, 
   onConfirmCompletion,
   onSubmitReview,
@@ -41,6 +45,19 @@ export default function CustomerPortal({
   const [reviewingRequest, setReviewingRequest] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [confirmingId, setConfirmingId] = useState(null);
+  const [editingRequest, setEditingRequest] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
+
+  const handleCancel = async (requestId) => {
+    if (window.confirm('Are you sure you want to cancel and delete this service request? This action cannot be undone.')) {
+      setCancellingId(requestId);
+      try {
+        await onCancelRequest(requestId);
+      } finally {
+        setCancellingId(null);
+      }
+    }
+  };
 
   // Category Details for strictly 3 categories
   const getCategoryDetails = (name) => {
@@ -422,9 +439,11 @@ export default function CustomerPortal({
             <div className="space-y-4">
               {filteredRequests.map((req) => {
                 const catDetails = getCategoryDetails(req.category_name);
-                const isCompleted = (req.status || '').toUpperCase() === 'COMPLETED';
-                const isPending = (req.status || '').toUpperCase() === 'PENDING';
-                const isAwaitingConfirmation = (req.status || '').toUpperCase().includes('CONFIRMATION');
+                const s = (req.status || '').toUpperCase();
+                const isCompleted = s === 'COMPLETED';
+                const isPending = s === 'PENDING';
+                const canModify = s === 'PENDING' || s === 'ASSIGNED';
+                const isAwaitingConfirmation = s.includes('CONFIRMATION');
                 const hasReview = !!req.review_id;
 
                 return (
@@ -549,15 +568,30 @@ export default function CustomerPortal({
                         ) : null}
                       </div>
 
-                      {/* Cancel pending request */}
-                      {isPending && (
-                        <button
-                          type="button"
-                          onClick={() => onCancelRequest(req.id)}
-                          className="text-xs text-red-400 hover:text-red-300 font-medium px-2 py-1 rounded hover:bg-zinc-800 transition"
-                        >
-                          Cancel Request
-                        </button>
+                      {/* Edit & Cancel Request buttons for pending/assigned tasks */}
+                      {canModify && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingRequest(req)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition cursor-pointer"
+                            title="Edit request details"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={cancellingId === req.id}
+                            onClick={() => handleCancel(req.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-800/80 transition cursor-pointer disabled:opacity-50"
+                            title="Cancel and delete request"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            {cancellingId === req.id ? 'Cancelling...' : 'Cancel Request'}
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -568,6 +602,22 @@ export default function CustomerPortal({
           )}
 
         </div>
+      )}
+
+      {/* Edit Request Modal */}
+      {editingRequest && (
+        <EditRequestModal
+          isOpen={!!editingRequest}
+          request={editingRequest}
+          categories={categories}
+          onClose={() => setEditingRequest(null)}
+          onSave={async (updatedData) => {
+            if (onUpdateRequest) {
+              await onUpdateRequest(editingRequest.id, updatedData);
+            }
+            setEditingRequest(null);
+          }}
+        />
       )}
 
       {/* Review Modal */}
