@@ -12,6 +12,12 @@ import {
   Check
 } from 'lucide-react';
 
+const FALLBACK_CATEGORIES = [
+  { id: 1, name: 'Electrician', description: 'Certified electrical repairs, wiring, lighting, and circuit diagnostics.' },
+  { id: 2, name: 'Plumber', description: 'Pipe leak repairs, drain unclogging, fixture installs, and water systems.' },
+  { id: 3, name: 'AC Repair', description: 'Cooling maintenance, refrigerant recharge, compressor fixes, and HVAC airflow.' },
+];
+
 export default function EditRequestModal({ 
   isOpen, 
   request, 
@@ -19,6 +25,7 @@ export default function EditRequestModal({
   onClose, 
   onSave 
 }) {
+  const displayCategories = (Array.isArray(categories) && categories.length > 0) ? categories : FALLBACK_CATEGORIES;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -33,10 +40,10 @@ export default function EditRequestModal({
       setDescription(request.description || '');
       setLocation(request.location || '');
       setPreferredDate(request.preferred_date ? request.preferred_date.split('T')[0] : '');
-      setCategoryId(request.category_id || categories[0]?.id || 1);
+      setCategoryId(request.category_id || displayCategories[0]?.id || 1);
       setError('');
     }
-  }, [request, categories]);
+  }, [request, displayCategories]);
 
   if (!isOpen || !request) return null;
 
@@ -143,7 +150,7 @@ export default function EditRequestModal({
               Service Category <span className="text-red-400">*</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {categories.map((cat) => {
+              {displayCategories.map((cat) => {
                 const isSelected = categoryId === cat.id;
                 const details = getCategoryDetails(cat.name);
                 return (

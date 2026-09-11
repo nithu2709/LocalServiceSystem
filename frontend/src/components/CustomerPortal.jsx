@@ -22,6 +22,12 @@ import {
 import ReviewModal from './ReviewModal';
 import EditRequestModal from './EditRequestModal';
 
+const FALLBACK_CATEGORIES = [
+  { id: 1, name: 'Electrician', description: 'Certified electrical repairs, wiring, lighting, and circuit diagnostics.' },
+  { id: 2, name: 'Plumber', description: 'Pipe leak repairs, drain unclogging, fixture installs, and water systems.' },
+  { id: 3, name: 'AC Repair', description: 'Cooling maintenance, refrigerant recharge, compressor fixes, and HVAC airflow.' },
+];
+
 export default function CustomerPortal({ 
   currentUser, 
   categories, 
@@ -34,8 +40,9 @@ export default function CustomerPortal({
   onSubmitReview,
   onRefresh
 }) {
+  const displayCategories = (Array.isArray(categories) && categories.length > 0) ? categories : FALLBACK_CATEGORIES;
   const [activeTab, setActiveTab] = useState('create'); // 'create' or 'history'
-  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || 1);
+  const [selectedCategory, setSelectedCategory] = useState(displayCategories[0]?.id || 1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -247,7 +254,7 @@ export default function CustomerPortal({
 
             {/* 3 Categories Selection Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              {categories.map((cat) => {
+              {displayCategories.map((cat) => {
                 const isSelected = selectedCategory === cat.id;
                 const details = getCategoryDetails(cat.name);
                 return (
@@ -255,7 +262,7 @@ export default function CustomerPortal({
                     key={cat.id}
                     type="button"
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`text-left p-4 rounded-xl border-2 transition relative flex flex-col justify-between ${
+                    className={`text-left p-4 rounded-xl border-2 transition relative flex flex-col justify-between cursor-pointer ${
                       isSelected
                         ? `${details.activeBg} shadow-lg`
                         : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 text-zinc-300'
@@ -609,7 +616,7 @@ export default function CustomerPortal({
         <EditRequestModal
           isOpen={!!editingRequest}
           request={editingRequest}
-          categories={categories}
+          categories={displayCategories}
           onClose={() => setEditingRequest(null)}
           onSave={async (updatedData) => {
             if (onUpdateRequest) {

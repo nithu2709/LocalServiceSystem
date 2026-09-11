@@ -88,16 +88,23 @@ function SignInForm({ onLogin, onClose, onSwitchToRegister }) {
   );
 }
 
+const FALLBACK_CATEGORIES = [
+  { id: 1, name: 'Electrician' },
+  { id: 2, name: 'Plumber' },
+  { id: 3, name: 'AC Repair' },
+];
+
 // -----------------------------------------------------------------------------
 // ISOLATED REGISTER COMPONENT (INSTANT REGISTRATION, NO VERIFICATION REQUIRED)
 // -----------------------------------------------------------------------------
 function RegisterForm({ categories = [], onRegister, onClose, onSwitchToSignIn }) {
+  const displayCategories = (Array.isArray(categories) && categories.length > 0) ? categories : FALLBACK_CATEGORIES;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('CUSTOMER');
-  const [categoryId, setCategoryId] = useState(categories?.[0]?.id || 1);
+  const [categoryId, setCategoryId] = useState(displayCategories[0]?.id || 1);
   const [experience, setExperience] = useState('');
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
@@ -233,7 +240,7 @@ function RegisterForm({ categories = [], onRegister, onClose, onSwitchToSignIn }
               onChange={(e) => setCategoryId(parseInt(e.target.value, 10))}
               className="w-full px-3 py-2 border border-zinc-700 rounded-xl bg-zinc-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
-              {categories?.map((c) => (
+              {displayCategories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>

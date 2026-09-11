@@ -16,9 +16,15 @@ import {
   Cloud
 } from 'lucide-react';
 
+export const DEFAULT_CATEGORIES = [
+  { id: 1, name: 'Electrician', description: 'Certified electrical repairs, wiring, lighting, and circuit diagnostics.' },
+  { id: 2, name: 'Plumber', description: 'Pipe leak repairs, drain unclogging, fixture installs, and water systems.' },
+  { id: 3, name: 'AC Repair', description: 'Cooling maintenance, refrigerant recharge, compressor fixes, and HVAC airflow.' },
+];
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [requests, setRequests] = useState([]);
   const [providers, setProviders] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
@@ -39,9 +45,12 @@ export default function App() {
     const initData = async () => {
       try {
         const catData = await api.getCategories();
-        if (catData?.data) setCategories(catData.data);
+        const loaded = catData?.data || catData?.categories;
+        if (Array.isArray(loaded) && loaded.length > 0) {
+          setCategories(loaded);
+        }
       } catch (err) {
-        console.error('Categories load error:', err);
+        console.error('Categories load error, using default 3 categories:', err);
       }
 
       // Check if user has an active, valid token in localStorage

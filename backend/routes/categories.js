@@ -22,6 +22,7 @@ router.get('/', async (req, res) => {
     res.json({
       success: true,
       data: result.rows,
+      categories: result.rows,
     });
   } catch (error) {
     console.error('Error fetching categories:', error);
