@@ -28,24 +28,37 @@ router.post('/register', async (req, res) => {
     const { name, email, password, phone, role, category_id, experience, location } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ error: 'Name, email, password, and role are required.' });
+      return res.status(400).json({ success: false, error: 'Name, email, password, and role are required.' });
     }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName = name.trim();
 
     const normalizedRole = role.toUpperCase();
     if (!['CUSTOMER', 'PROVIDER', 'ADMIN'].includes(normalizedRole)) {
-      return res.status(400).json({ error: 'Role must be CUSTOMER, PROVIDER, or ADMIN.' });
+      return res.status(400).json({ success: false, error: 'Role must be CUSTOMER or PROVIDER.' });
     }
 
-    // Check if email already exists
-    const existing = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'An account with this email already exists.' });
+    // Check if email already exists in Supabase database
+    try {
+      const existing = await query('SELECT id, is_verified FROM users WHERE email = $1', [cleanEmail]);
+      if (existing.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: existing.rows[0].is_verified
+            ? 'An account with this email already exists. Please sign in.'
+            : 'An account with this email already exists. Please check your inbox or resend verification.'
+        });
+      }
+    } catch (checkErr) {
+      console.error('Supabase DB check error:', checkErr);
+      return res.status(500).json({ success: false, error: 'Database error while checking account existence: ' + checkErr.message });
     }
 
     // If provider, check valid category
     if (normalizedRole === 'PROVIDER') {
       if (!category_id) {
-        return res.status(400).json({ error: 'Service category is required for service providers.' });
+        return res.status(400).json({ success: false, error: 'Service category is required for service providers.' });
       }
 
       // Check category is one of the 3 allowed categories
@@ -55,6 +68,7 @@ router.post('/register', async (req, res) => {
       );
       if (catCheck.rows.length === 0) {
         return res.status(400).json({
+          success: false,
           error: `Invalid category. Must be one of: ${ALLOWED_CATEGORIES.join(', ')}`,
         });
       }
@@ -66,29 +80,54 @@ router.post('/register', async (req, res) => {
     // Generate secure email verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    // Insert user with is_verified = false and 24h expiration
-    const userInsert = await query(
-      `INSERT INTO users (name, email, password_hash, phone, role, is_verified, verification_token, verification_token_expires_at)
-       VALUES ($1, $2, $3, $4, $5, FALSE, $6, CURRENT_TIMESTAMP + INTERVAL '24 hours')
-       RETURNING id, name, email, phone, role, is_verified, created_at`,
-      [name.trim(), email.toLowerCase().trim(), password_hash, phone || null, normalizedRole, verificationToken]
-    );
-
-    const newUser = userInsert.rows[0];
-
-    // If provider, insert into service_providers
-    if (normalizedRole === 'PROVIDER') {
-      const providerInsert = await query(
-        `INSERT INTO service_providers (user_id, category_id, experience, availability, location)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id AS provider_id, category_id, experience, availability, location`,
-        [newUser.id, category_id, experience || '1+ years experience', true, location || 'Local Service Area']
+    // 1. Insert user into Supabase database
+    let newUser;
+    try {
+      const userInsert = await query(
+        `INSERT INTO users (name, email, password_hash, phone, role, is_verified, verification_token, verification_token_expires_at)
+         VALUES ($1, $2, $3, $4, $5, FALSE, $6, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+         RETURNING id, name, email, phone, role, is_verified, created_at`,
+        [cleanName, cleanEmail, password_hash, phone?.trim() || null, normalizedRole, verificationToken]
       );
-      newUser.provider = providerInsert.rows[0];
+      newUser = userInsert.rows[0];
+    } catch (dbErr) {
+      console.error('Supabase DB user insertion failed:', dbErr);
+      if (dbErr.code === '23505') {
+        return res.status(409).json({ success: false, error: 'An account with this email already exists.' });
+      }
+      return res.status(500).json({ success: false, error: 'Database insertion failed: ' + dbErr.message });
     }
 
-    // Dispatch verification email
-    await sendVerificationEmail(newUser.email, newUser.name, verificationToken);
+    // 2. If provider, insert into service_providers
+    if (normalizedRole === 'PROVIDER') {
+      try {
+        const providerInsert = await query(
+          `INSERT INTO service_providers (user_id, category_id, experience, availability, location)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id AS provider_id, category_id, experience, availability, location`,
+          [newUser.id, category_id, experience?.trim() || '1+ years experience', true, location?.trim() || 'Local Service Area']
+        );
+        newUser.provider = providerInsert.rows[0];
+      } catch (provErr) {
+        console.error('Supabase DB provider insertion failed:', provErr);
+        // Rollback created user
+        await query('DELETE FROM users WHERE id = $1', [newUser.id]).catch(() => {});
+        return res.status(500).json({ success: false, error: 'Failed to record provider profile: ' + provErr.message });
+      }
+    }
+
+    // 3. Dispatch verification email (with automatic cleanup on dispatch failure)
+    try {
+      await sendVerificationEmail(newUser.email, newUser.name, verificationToken);
+    } catch (emailErr) {
+      console.error('Verification email dispatch failed:', emailErr.message);
+      // Clean up newly created user record so database doesn't retain un-emailed orphaned account
+      await query('DELETE FROM users WHERE id = $1', [newUser.id]).catch(() => {});
+      return res.status(502).json({
+        success: false,
+        error: 'Unable to dispatch verification email. Please check your email address and try again.'
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -101,11 +140,11 @@ router.post('/register', async (req, res) => {
         role: newUser.role,
         is_verified: false,
       },
-      verificationToken, // Provided for instant demo/testing fallback
+      verificationToken, // Fallback for testing / instant activation
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed. ' + error.message });
+    res.status(500).json({ success: false, error: 'Registration failed: ' + error.message });
   }
 });
 

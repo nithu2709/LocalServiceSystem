@@ -15,34 +15,46 @@ const getTransporter = async () => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 6000,
     });
-  } else {
-    // If no custom SMTP credentials provided, create a test account on Ethereal or fallback logger
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-      console.log('📧 Ethereal test mailer initialized for LocalService:', testAccount.user);
-    } catch (err) {
-      console.warn('⚠️ Could not connect to test mailer, using console fallback:', err.message);
-      transporter = {
-        sendMail: async (mailOptions) => {
-          console.log('\n================== SIMULATED CONFIRMATION EMAIL ==================');
-          console.log(`To: ${mailOptions.to}`);
-          console.log(`Subject: ${mailOptions.subject}`);
-          console.log(`Content:\n${mailOptions.text}`);
-          console.log('==================================================================\n');
-          return { messageId: 'simulated-' + Date.now() };
-        },
-      };
-    }
+    return transporter;
+  }
+
+  // Fallback: try Ethereal with a 3-second timeout, else fallback to simulated logger
+  try {
+    const testAccountPromise = nodemailer.createTestAccount();
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Ethereal testAccount timed out')), 3000)
+    );
+    const testAccount = await Promise.race([testAccountPromise, timeoutPromise]);
+
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 6000,
+    });
+    console.log('📧 Ethereal test mailer initialized for LocalService:', testAccount.user);
+  } catch (err) {
+    console.warn('⚠️ Could not connect to external mailer, using simulated fallback:', err.message);
+    transporter = {
+      sendMail: async (mailOptions) => {
+        console.log('\n================== SIMULATED CONFIRMATION EMAIL ==================');
+        console.log(`To: ${mailOptions.to}`);
+        console.log(`Subject: ${mailOptions.subject}`);
+        console.log(`Content:\n${mailOptions.text}`);
+        console.log('==================================================================\n');
+        return { messageId: 'simulated-' + Date.now() };
+      },
+    };
   }
 
   return transporter;
@@ -53,7 +65,11 @@ const getTransporter = async () => {
  */
 const sendVerificationEmail = async (email, name, token) => {
   try {
-    const mailClient = await getTransporter();
+    const mailClient = await Promise.race([
+      getTransporter(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Email transporter initialization timed out')), 4000))
+    ]);
+
     const appUrl = process.env.APP_URL || 'https://localservicesystem.onrender.com';
     const verifyUrl = `${appUrl}/api/auth/verify-email?token=${token}`;
 
@@ -93,16 +109,21 @@ const sendVerificationEmail = async (email, name, token) => {
       `,
     };
 
-    const info = await mailClient.sendMail(mailOptions);
+    const sendPromise = mailClient.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP sendMail timed out')), 6000)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✉️ Verification email dispatched to ${email}. Message ID: ${info.messageId}`);
-    if (nodemailer.getTestMessageUrl && info) {
+    if (nodemailer.getTestMessageUrl && info && !info.messageId?.startsWith('simulated-')) {
       const preview = nodemailer.getTestMessageUrl(info);
       if (preview) console.log(`🔗 Preview Email: ${preview}`);
     }
-    return true;
+    return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error('Failed to send verification email:', err.message);
-    return false;
+    console.error('❌ Failed to dispatch verification email:', err.message);
+    throw err;
   }
 };
 

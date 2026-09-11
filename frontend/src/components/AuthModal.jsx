@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, LogIn, UserPlus, AlertCircle, MailCheck, Send, CheckCircle2, KeyRound } from 'lucide-react';
 import { api } from '../api';
 
@@ -22,6 +22,15 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
   const [tokenInput, setTokenInput] = useState('');
   const [verifyingToken, setVerifyingToken] = useState(false);
 
+  // Reset loading and error states whenever modal opens or closes
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(false);
+      setError('');
+      setSuccessMessage('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
@@ -33,10 +42,10 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
     try {
       if (isRegister) {
         const res = await onRegister({
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim(),
           password,
-          phone,
+          phone: phone.trim(),
           role,
           category_id: role === 'PROVIDER' ? categoryId : null,
           experience: role === 'PROVIDER' ? experience : null,
@@ -45,7 +54,7 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
 
         if (res?.requiresVerification) {
           setVerificationPending(true);
-          setUnverifiedEmail(email);
+          setUnverifiedEmail(email.trim());
           if (res.verificationToken) {
             setTokenInput(res.verificationToken);
           }
@@ -53,14 +62,16 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
           onClose();
         }
       } else {
-        await onLogin(email, password);
+        await onLogin(email.trim(), password);
         onClose();
       }
     } catch (err) {
-      if (err.message && err.message.includes('verified')) {
-        setUnverifiedEmail(email);
+      console.error('Auth submission error:', err);
+      const msg = err.message || 'Authentication failed. Please check your details and try again.';
+      if (msg.toLowerCase().includes('verif')) {
+        setUnverifiedEmail(email.trim());
       }
-      setError(err.message || 'Authentication failed.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -190,7 +201,7 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
             <div className="flex border-b border-zinc-800 mb-5">
               <button
                 type="button"
-                onClick={() => { setIsRegister(false); setError(''); setSuccessMessage(''); }}
+                onClick={() => { setIsRegister(false); setError(''); setSuccessMessage(''); setLoading(false); }}
                 className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition ${
                   !isRegister
                     ? 'border-indigo-500 text-indigo-400'
@@ -201,7 +212,7 @@ export default function AuthModal({ categories, isOpen, onClose, onLogin, onRegi
               </button>
               <button
                 type="button"
-                onClick={() => { setIsRegister(true); setError(''); setSuccessMessage(''); }}
+                onClick={() => { setIsRegister(true); setError(''); setSuccessMessage(''); setLoading(false); }}
                 className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition ${
                   isRegister
                     ? 'border-indigo-500 text-indigo-400'

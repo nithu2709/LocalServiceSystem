@@ -107,15 +107,35 @@ export default function App() {
 
   // 3. User Authentication
   const handleLogin = async (email, password) => {
-    const data = await api.login(email, password);
-    setCurrentUser(data.user);
-    showToast(`Welcome back, ${data.user.name}!`);
+    try {
+      const data = await api.login(email, password);
+      if (data.user) {
+        setCurrentUser(data.user);
+        showToast(`Welcome back, ${data.user.name}!`);
+      }
+      return data;
+    } catch (err) {
+      showToast(err.message || 'Login failed. Please check your credentials.', 'error');
+      throw err;
+    }
   };
 
   const handleRegister = async (userData) => {
-    const data = await api.register(userData);
-    setCurrentUser(data.user);
-    showToast(`Account created successfully! Welcome, ${data.user.name}!`);
+    try {
+      const data = await api.register(userData);
+      if (data.requiresVerification) {
+        showToast(data.message || 'Registration successful! Verification email sent.');
+        return data;
+      }
+      if (data.token && data.user) {
+        setCurrentUser(data.user);
+        showToast(`Account created successfully! Welcome, ${data.user.name}!`);
+      }
+      return data;
+    } catch (err) {
+      showToast(err.message || 'Registration failed.', 'error');
+      throw err;
+    }
   };
 
   const handleLogout = () => {
@@ -359,6 +379,32 @@ export default function App() {
         onLogin={handleLogin}
         onRegister={handleRegister}
       />
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md pointer-events-auto transition-all duration-300">
+          <div
+            className={`px-4 py-3 rounded-xl shadow-2xl border text-xs flex items-center gap-3 ${
+              toast.type === 'error'
+                ? 'bg-red-950/95 border-red-800 text-red-200'
+                : 'bg-zinc-900/95 border-zinc-700 text-white'
+            }`}
+          >
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span className="font-medium flex-1">{toast.text}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-zinc-400 hover:text-white text-base leading-none px-1"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

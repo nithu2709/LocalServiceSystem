@@ -23,8 +23,15 @@ const getHeaders = (customHeaders = {}) => {
 // Generic fetch wrapper
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  
+  // 15-second request timeout controller to prevent infinite pending state
+  const controller = new AbortController();
+  const timeoutMs = options.timeout || 15000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   const config = {
     ...options,
+    signal: options.signal || controller.signal,
     headers: getHeaders(options.headers),
   };
 
@@ -34,15 +41,30 @@ async function request(endpoint, options = {}) {
 
   try {
     const response = await fetch(url, config);
+    clearTimeout(timeoutId);
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const errorMsg = data?.error || `Request failed with status ${response.status}`;
-      throw new Error(errorMsg);
+      const errorMsg =
+        (typeof data?.error === 'string' ? data.error : data?.error?.message) ||
+        data?.message ||
+        data?.error_description ||
+        `Request failed with status ${response.status}`;
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      error.data = data;
+      throw error;
     }
 
     return data;
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      const timeoutErr = new Error('Request timed out. The server may be waking up, please try again.');
+      timeoutErr.status = 408;
+      console.error(`API [${config.method || 'GET'} ${endpoint}] timeout error`);
+      throw timeoutErr;
+    }
     console.error(`API [${config.method || 'GET'} ${endpoint}] error:`, err.message);
     throw err;
   }
