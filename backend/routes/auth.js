@@ -41,13 +41,11 @@ router.post('/register', async (req, res) => {
 
     // Check if email already exists in Supabase database
     try {
-      const existing = await query('SELECT id, is_verified FROM users WHERE email = $1', [cleanEmail]);
+      const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
       if (existing.rows.length > 0) {
         return res.status(409).json({
           success: false,
-          error: existing.rows[0].is_verified
-            ? 'An account with this email already exists. Please sign in.'
-            : 'An account with this email already exists. Please check your inbox or resend verification.'
+          error: 'An account with this email already exists. Please sign in.'
         });
       }
     } catch (checkErr) {
@@ -77,17 +75,14 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // Generate secure email verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    // 1. Insert user into Supabase database
+    // 1. Insert user into database with instant active verification (is_verified = TRUE)
     let newUser;
     try {
       const userInsert = await query(
-        `INSERT INTO users (name, email, password_hash, phone, role, is_verified, verification_token, verification_token_expires_at)
-         VALUES ($1, $2, $3, $4, $5, FALSE, $6, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+        `INSERT INTO users (name, email, password_hash, phone, role, is_verified)
+         VALUES ($1, $2, $3, $4, $5, TRUE)
          RETURNING id, name, email, phone, role, is_verified, created_at`,
-        [cleanName, cleanEmail, password_hash, phone?.trim() || null, normalizedRole, verificationToken]
+        [cleanName, cleanEmail, password_hash, phone?.trim() || null, normalizedRole]
       );
       newUser = userInsert.rows[0];
     } catch (dbErr) {
@@ -116,31 +111,14 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 3. Dispatch verification email (with automatic cleanup on dispatch failure)
-    try {
-      await sendVerificationEmail(newUser.email, newUser.name, verificationToken);
-    } catch (emailErr) {
-      console.error('Verification email dispatch failed:', emailErr.message);
-      // Clean up newly created user record so database doesn't retain un-emailed orphaned account
-      await query('DELETE FROM users WHERE id = $1', [newUser.id]).catch(() => {});
-      return res.status(502).json({
-        success: false,
-        error: 'Unable to dispatch verification email. Please check your email address and try again.'
-      });
-    }
+    // 3. Generate JWT token for instant automatic sign-in
+    const token = generateToken(newUser);
 
     res.status(201).json({
       success: true,
-      requiresVerification: true,
-      message: 'Registration successful! We have sent a confirmation email to verify your address. Please verify your email before logging in.',
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        is_verified: false,
-      },
-      verificationToken, // Fallback for testing / instant activation
+      message: 'Account registered successfully!',
+      token,
+      user: newUser,
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -357,15 +335,6 @@ router.post('/login', async (req, res) => {
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-
-    // Enforce email verification check!
-    if (user.is_verified === false) {
-      return res.status(403).json({
-        error: 'Your email address has not been verified yet. Please check your inbox for the confirmation email before logging in.',
-        unverified: true,
-        email: user.email,
-      });
     }
 
     // Attach provider info if role is PROVIDER

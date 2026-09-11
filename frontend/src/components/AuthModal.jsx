@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, LogIn, UserPlus, AlertCircle, MailCheck, Send, CheckCircle2, KeyRound } from 'lucide-react';
-import { api } from '../api';
+import React, { useState } from 'react';
+import { X, AlertCircle } from 'lucide-react';
 
 // -----------------------------------------------------------------------------
 // ISOLATED SIGN IN COMPONENT
@@ -21,7 +20,7 @@ function SignInForm({ onLogin, onClose, onSwitchToRegister }) {
     setLoading(true);
     try {
       await onLogin(email.trim(), password);
-      onClose();
+      if (onClose) onClose();
     } catch (err) {
       console.error('Sign In error:', err);
       setError(err.message || 'Invalid email or password.');
@@ -80,7 +79,7 @@ function SignInForm({ onLogin, onClose, onSwitchToRegister }) {
         <button
           type="button"
           onClick={onSwitchToRegister}
-          className="text-indigo-400 hover:underline font-semibold"
+          className="text-indigo-400 hover:underline font-semibold cursor-pointer"
         >
           Register here
         </button>
@@ -90,9 +89,9 @@ function SignInForm({ onLogin, onClose, onSwitchToRegister }) {
 }
 
 // -----------------------------------------------------------------------------
-// ISOLATED REGISTER COMPONENT
+// ISOLATED REGISTER COMPONENT (INSTANT REGISTRATION, NO VERIFICATION REQUIRED)
 // -----------------------------------------------------------------------------
-function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSuccess, onSwitchToSignIn }) {
+function RegisterForm({ categories = [], onRegister, onClose, onSwitchToSignIn }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -114,8 +113,8 @@ function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSucc
     setLoading(true);
 
     try {
-      // STRICTLY AND EXCLUSIVELY calls registration endpoint
-      const res = await onRegister({
+      // Calls registration endpoint and logs in immediately
+      await onRegister({
         name: name.trim(),
         email: email.trim(),
         password,
@@ -126,11 +125,7 @@ function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSucc
         location: role === 'PROVIDER' ? location.trim() : null,
       });
 
-      if (res?.requiresVerification) {
-        onRegistrationSuccess(email.trim(), res.verificationToken);
-      } else {
-        if (onClose) onClose();
-      }
+      if (onClose) onClose();
     } catch (err) {
       console.error('Registration submit error:', err);
       setError(err.message || 'Registration failed. Please check your details and try again.');
@@ -270,17 +265,13 @@ function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSucc
         </div>
       )}
 
-      <div className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 text-[11px] text-zinc-400">
-        ℹ️ A confirmation email will be dispatched to your inbox. You must verify your address before logging in.
-      </div>
-
       <div className="pt-2">
         <button
           type="submit"
           disabled={loading}
           className="w-full py-2.5 px-4 font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
-          {loading ? 'Registering Account...' : 'Register & Send Verification'}
+          {loading ? 'Creating Account...' : 'Register Account'}
         </button>
       </div>
 
@@ -289,7 +280,7 @@ function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSucc
         <button
           type="button"
           onClick={onSwitchToSignIn}
-          className="text-indigo-400 hover:underline font-semibold"
+          className="text-indigo-400 hover:underline font-semibold cursor-pointer"
         >
           Sign in here
         </button>
@@ -299,72 +290,12 @@ function RegisterForm({ categories = [], onRegister, onClose, onRegistrationSucc
 }
 
 // -----------------------------------------------------------------------------
-// MAIN AUTH MODAL SHELL WITH COMPLETE FORM & STATE ISOLATION
+// MAIN AUTH MODAL SHELL
 // -----------------------------------------------------------------------------
 export default function AuthModal({ categories = [], isOpen, onClose, onLogin, onRegister }) {
   const [activeTab, setActiveTab] = useState('login'); // 'login' or 'register'
-  const [successMessage, setSuccessMessage] = useState('');
-  const [verificationPending, setVerificationPending] = useState(false);
-  const [unverifiedEmail, setUnverifiedEmail] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
-  const [verifyingToken, setVerifyingToken] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [verificationError, setVerificationError] = useState('');
-
-  // Reset modal state when opened/closed
-  useEffect(() => {
-    if (isOpen) {
-      setSuccessMessage('');
-      setVerificationError('');
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const handleRegistrationSuccess = (registeredEmail, verificationToken) => {
-    setUnverifiedEmail(registeredEmail);
-    if (verificationToken) {
-      setTokenInput(verificationToken);
-    }
-    setVerificationPending(true);
-  };
-
-  const handleVerifyManualToken = async (e) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-    setVerifyingToken(true);
-    setVerificationError('');
-    try {
-      await api.verifyEmail(tokenInput.trim());
-      setSuccessMessage('Email verified successfully! You can now sign in.');
-      setVerificationPending(false);
-      setActiveTab('login');
-    } catch (err) {
-      setVerificationError(err.message || 'Verification failed. Token may be expired.');
-    } finally {
-      setVerifyingToken(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    if (!unverifiedEmail) {
-      setVerificationError('No email address found to resend confirmation.');
-      return;
-    }
-    setResendLoading(true);
-    setVerificationError('');
-    try {
-      const res = await api.resendVerification(unverifiedEmail);
-      setSuccessMessage('A new verification email has been dispatched!');
-      if (res.verificationToken) {
-        setTokenInput(res.verificationToken);
-      }
-    } catch (err) {
-      setVerificationError(err.message || 'Failed to resend confirmation email.');
-    } finally {
-      setResendLoading(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -372,131 +303,50 @@ export default function AuthModal({ categories = [], isOpen, onClose, onLogin, o
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* VERIFICATION PENDING SCREEN */}
-        {verificationPending ? (
-          <div className="text-center py-4 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-950/80 border border-indigo-800 text-indigo-400 flex items-center justify-center mx-auto">
-              <MailCheck className="w-7 h-7" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Check Your Email</h2>
-              <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                We've sent a verification confirmation to <strong className="text-white">{unverifiedEmail}</strong>. Please click the link in that email to activate your account.
-              </p>
-            </div>
+        {/* Tab Toggle */}
+        <div className="flex border-b border-zinc-800 mb-5">
+          <button
+            type="button"
+            onClick={() => setActiveTab('login')}
+            className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+              activeTab === 'login'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('register')}
+            className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+              activeTab === 'register'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Register Account
+          </button>
+        </div>
 
-            {successMessage && (
-              <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs rounded-xl flex items-center gap-2 text-left">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{successMessage}</span>
-              </div>
-            )}
-
-            {verificationError && (
-              <div className="p-3 bg-red-950/50 border border-red-800 text-red-300 text-xs rounded-xl flex items-center gap-2 text-left">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{verificationError}</span>
-              </div>
-            )}
-
-            {/* Quick Token Validation Box */}
-            <form onSubmit={handleVerifyManualToken} className="pt-2 text-left space-y-2 border-t border-zinc-800">
-              <label className="block text-[11px] font-semibold text-zinc-400">
-                Or enter your verification code/token:
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  placeholder="Paste verification token here..."
-                  className="flex-1 px-3 py-2 text-xs bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                />
-                <button
-                  type="submit"
-                  disabled={verifyingToken || !tokenInput.trim()}
-                  className="px-3 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {verifyingToken ? 'Verifying...' : 'Verify'}
-                </button>
-              </div>
-            </form>
-
-            <div className="flex items-center justify-between pt-3 text-xs border-t border-zinc-800">
-              <button
-                type="button"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer disabled:opacity-50"
-              >
-                {resendLoading ? 'Sending...' : 'Resend Email'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setVerificationPending(false); setActiveTab('login'); }}
-                className="text-zinc-400 hover:text-white cursor-pointer"
-              >
-                Back to Sign In
-              </button>
-            </div>
-          </div>
+        {activeTab === 'login' ? (
+          <SignInForm
+            onLogin={onLogin}
+            onClose={onClose}
+            onSwitchToRegister={() => setActiveTab('register')}
+          />
         ) : (
-          /* STANDARD TABBED INTERFACE: STRICTLY ISOLATED SIGN IN / REGISTER */
-          <>
-            {/* Tab Toggle */}
-            <div className="flex border-b border-zinc-800 mb-5">
-              <button
-                type="button"
-                onClick={() => { setActiveTab('login'); setSuccessMessage(''); }}
-                className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
-                  activeTab === 'login'
-                    ? 'border-indigo-500 text-indigo-400'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('register'); setSuccessMessage(''); }}
-                className={`flex-1 pb-3 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
-                  activeTab === 'register'
-                    ? 'border-indigo-500 text-indigo-400'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Register Account
-              </button>
-            </div>
-
-            {successMessage && (
-              <div className="mb-4 p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{successMessage}</span>
-              </div>
-            )}
-
-            {activeTab === 'login' ? (
-              <SignInForm
-                onLogin={onLogin}
-                onClose={onClose}
-                onSwitchToRegister={() => { setActiveTab('register'); setSuccessMessage(''); }}
-              />
-            ) : (
-              <RegisterForm
-                categories={categories}
-                onRegister={onRegister}
-                onClose={onClose}
-                onRegistrationSuccess={handleRegistrationSuccess}
-                onSwitchToSignIn={() => { setActiveTab('login'); setSuccessMessage(''); }}
-              />
-            )}
-          </>
+          <RegisterForm
+            categories={categories}
+            onRegister={onRegister}
+            onClose={onClose}
+            onSwitchToSignIn={() => setActiveTab('login')}
+          />
         )}
       </div>
     </div>

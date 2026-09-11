@@ -111,6 +111,7 @@ export default function App() {
       const data = await api.login(email, password);
       if (data.user) {
         setCurrentUser(data.user);
+        setAuthModalOpen(false);
         showToast(`Welcome back, ${data.user.name}!`);
       }
       return data;
@@ -123,12 +124,9 @@ export default function App() {
   const handleRegister = async (userData) => {
     try {
       const data = await api.register(userData);
-      if (data.requiresVerification) {
-        showToast(data.message || 'Registration successful! Verification email sent.');
-        return data;
-      }
       if (data.token && data.user) {
         setCurrentUser(data.user);
+        setAuthModalOpen(false);
         showToast(`Account created successfully! Welcome, ${data.user.name}!`);
       }
       return data;
