@@ -11,7 +11,6 @@ import {
   Wind, 
   CheckCircle2, 
   AlertCircle, 
-  Sparkles, 
   ArrowRight,
   Server,
   Cloud
@@ -276,11 +275,6 @@ export default function App() {
         ) : (
           /* Public / Unauthenticated Landing Showcase */
           <div className="max-w-4xl mx-auto px-4 py-16 text-center text-white">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-800 mb-6">
-              <Sparkles className="w-3.5 h-3.5" />
-              College Cloud Architecture Project
-            </div>
-
             <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">
               Local Service Request <br />
               <span className="text-indigo-400">Management System</span>
